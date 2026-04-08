@@ -14,7 +14,6 @@ export async function POST(req: Request) {
 
     const verification = await prisma.loginVerification.findUnique({
       where: { token: verificationToken },
-      include: { user: true },
     });
 
     if (!verification) {
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       approved: verification.approved,
       trusted: verification.trusted,
-      userId: verification.userId,
+      used: verification.used,
     });
   } catch (error) {
     console.error("VERIFICATION STATUS ERROR:", error);

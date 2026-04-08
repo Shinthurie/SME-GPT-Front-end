@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import * as jwt from "jsonwebtoken";
 
@@ -48,14 +47,17 @@ export async function POST(req: Request) {
     }
 
     const jwtToken = jwt.sign(
-      { userId: verification.user.id },
+      {
+        userId: verification.user.id,
+        sessionVersion: verification.user.sessionVersion,
+      },
       process.env.JWT_SECRET as string,
       { expiresIn: "7d" }
     );
 
-    const cookieStore = await cookies();
+    const response = NextResponse.json({ success: true });
 
-    cookieStore.set("token", jwtToken, {
+    response.cookies.set("token", jwtToken, {
       httpOnly: true,
       path: "/",
       sameSite: "lax",
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    cookieStore.set("device_token", verification.deviceToken, {
+    response.cookies.set("device_token", verification.deviceToken, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -89,6 +91,13 @@ export async function POST(req: Request) {
             userAgent: verification.userAgent,
           },
         });
+      } else {
+        await prisma.trustedDevice.update({
+          where: { id: existingDevice.id },
+          data: {
+            lastUsedAt: new Date(),
+          },
+        });
       }
     }
 
@@ -97,7 +106,7 @@ export async function POST(req: Request) {
       data: { used: true },
     });
 
-    return NextResponse.json({ success: true });
+    return response;
   } catch (error) {
     console.error("COMPLETE LOGIN ERROR:", error);
     return NextResponse.json(

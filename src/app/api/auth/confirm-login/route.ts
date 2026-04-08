@@ -43,13 +43,11 @@ export async function GET(req: Request) {
         <body style="font-family: Arial, sans-serif; padding: 40px;">
           <h2>Login Confirmed</h2>
           <p>The requested device can now continue to the dashboard.</p>
-          <p>This device was not marked as trusted.</p>
+          <p>You may return to the original device.</p>
         </body>
       </html>
       `,
-      {
-        headers: { "Content-Type": "text/html" },
-      }
+      { headers: { "Content-Type": "text/html" } }
     );
   } catch (error) {
     console.error("CONFIRM LOGIN ERROR:", error);
