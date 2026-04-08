@@ -23,26 +23,30 @@ export default function BottomNav() {
   ];
 
   return (
-    <nav className="sticky bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto grid w-full max-w-[1180px] grid-cols-4 px-2 py-2">
-        {items.map((item) => {
-          const active = pathname === item.href;
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="grid grid-cols-4 px-2 py-2">
+          {items.map((item) => {
+            const active = pathname === item.href;
 
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-[10px] font-medium transition sm:text-[11px] ${
-                active ? "text-[#2563ff]" : "text-[#94a3b8] hover:bg-slate-50"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[20px] sm:text-[22px]">
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-[10px] font-medium transition sm:text-[11px] ${
+                  active
+                    ? "text-[#2563ff]"
+                    : "text-[#94a3b8] hover:bg-slate-50"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px] sm:text-[22px]">
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

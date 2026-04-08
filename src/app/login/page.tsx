@@ -16,24 +16,37 @@ export default function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setLang(getStoredLanguage());
-    const session = getSession();
-    if (session?.isLoggedIn) router.push("/dashboard");
+    const checkSession = async () => {
+      setLang(getStoredLanguage());
+      const session = await getSession();
+
+      if (session) {
+        router.push("/dashboard");
+      }
+    };
+
+    checkSession();
   }, [router]);
 
   const t = ui[lang];
 
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
 
-    const ok = loginUser(email, password);
+    const result = await loginUser(email, password);
 
-    if (ok) {
-      router.push("/dashboard");
-    } else {
+    if (!result.ok) {
       setError(t.invalidLogin);
+      return;
     }
+
+    if (result.data?.requiresTwoFactor) {
+      router.push(`/login/verify?token=${result.data.verificationToken}`);
+      return;
+    }
+
+    window.location.href = "/dashboard";
   };
 
   return (
@@ -41,7 +54,6 @@ export default function LoginPage() {
       <div className="min-h-screen bg-[#f7f8fb] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
         <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1280px] items-center">
           <div className="grid w-full items-center gap-8 lg:grid-cols-[520px_minmax(0,1fr)] xl:grid-cols-[560px_minmax(0,1fr)]">
-            {/* LEFT: exact auth card feel */}
             <div
               className="w-full rounded-[30px] border border-[#d9dff0] bg-[#f7f8fb] px-5 py-8 shadow-[0_0_0_2px_rgba(88,114,255,0.08)] sm:px-8 sm:py-10"
               style={{
@@ -68,9 +80,9 @@ export default function LoginPage() {
                   {t.appName}
                 </h1>
 
-                <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a96ab]">
-                  {t.enterpriseSubtitle}
-                </p>
+               <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a96ab]">
+  Secure AI Workspace
+</p>
 
                 <form onSubmit={handleLogin} className="mt-10 space-y-5">
                   <div>
@@ -113,6 +125,7 @@ export default function LoginPage() {
                     <div className="mt-2 flex justify-end">
                       <button
                         type="button"
+                        onClick={() => router.push("/forgot-password")}
                         className="text-[11px] font-semibold text-[#4d7cff] transition hover:opacity-80"
                       >
                         {t.forgotAccess}
@@ -165,22 +178,6 @@ export default function LoginPage() {
                   {t.authCaption}
                 </p>
 
-                <div className="mt-7 flex justify-center">
-                  <div className="rounded-full border border-[#e1e6f2] bg-white px-4 py-2 shadow-sm">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="material-symbols-outlined text-[14px] text-[#7b879b]">
-                        lock
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#66748b]">
-                        {t.secureSystem}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-center text-[9px] text-[#99a3b4]">
-                      {t.secureNote}
-                    </p>
-                  </div>
-                </div>
-
                 <div className="mt-6 text-center">
                   <p className="text-[12px] text-[#7e8aa2]">
                     {t.noAccount}{" "}
@@ -192,7 +189,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* RIGHT: side panel only on laptop */}
             <div className="hidden h-full lg:flex lg:items-center">
               <div className="w-full rounded-[30px] border border-[#d9dff0] bg-white p-8 xl:p-10 shadow-sm">
                 <h2 className="text-4xl font-extrabold tracking-tight text-[#0f172a]">

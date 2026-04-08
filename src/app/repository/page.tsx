@@ -123,7 +123,7 @@ export default function RepositoryPage() {
 
   return (
     <MobileShell>
-      <div className="min-h-screen bg-[#f6f7fb]">
+      <div className="min-h-screen bg-[#f6f7fb] pb-24">
         <main className="mx-auto w-full max-w-[920px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>

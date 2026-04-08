@@ -20,7 +20,7 @@ export default function QueryPage() {
 
   return (
     <MobileShell>
-      <div className="min-h-screen bg-[#f6f7fb]">
+      <div className="min-h-screen bg-[#f6f7fb] pb-24">
         <main className="mx-auto w-full max-w-[980px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-4 flex items-center justify-between">
             <button

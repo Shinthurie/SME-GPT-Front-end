@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MobileShell from "@/components/layout/MobileShell";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
-import { getSession, saveUser } from "@/lib/auth";
+import { getSession, signupUser } from "@/lib/auth";
 import { AppLanguage, getStoredLanguage, ui } from "@/lib/i18n";
 
 export default function SignupPage() {
@@ -18,22 +18,29 @@ export default function SignupPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+  const checkSession = async () => {
     setLang(getStoredLanguage());
-    const session = getSession();
-    if (session?.isLoggedIn) router.push("/dashboard");
-  }, [router]);
+    const session = await getSession();
+
+    if (session) {
+      router.push("/dashboard");
+    }
+  };
+
+  checkSession();
+}, [router]);
 
   const t = ui[lang];
 
-  const handleSignup = (e: FormEvent) => {
+  const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
 
-    saveUser({
-      fullName,
-      companyName,
-      email,
-      password,
-    });
+  const ok = await signupUser({
+  fullName,
+  companyName,
+  email,
+  password,
+});
 
     setMessage(t.signupSuccess);
 

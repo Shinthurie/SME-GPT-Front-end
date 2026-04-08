@@ -112,21 +112,29 @@ export default function DashboardPage() {
   const [lang, setLang] = useState<AppLanguage>("en");
 
   useEffect(() => {
-    setLang(getStoredLanguage());
-    const currentSession = getSession();
-    if (!currentSession?.isLoggedIn) {
-      router.push("/login");
-      return;
-    }
-    setSession(currentSession);
+    const load = async () => {
+      setLang(getStoredLanguage());
+
+      const currentSession = await getSession();
+
+      if (!currentSession) {
+        router.push("/login");
+        return;
+      }
+
+      setSession(currentSession);
+    };
+
+    load();
   }, [router]);
 
   if (!session) return null;
+
   const t = ui[lang];
 
   return (
     <MobileShell>
-      <div className="min-h-screen bg-[#f6f7fb]">
+      <div className="min-h-screen bg-[#f6f7fb] pb-24">
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
             <div className="flex items-center gap-3">
@@ -160,8 +168,8 @@ export default function DashboardPage() {
               </div>
 
               <button
-                onClick={() => {
-                  logoutUser();
+                onClick={async () => {
+                  await logoutUser();
                   router.push("/login");
                 }}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-[#64748b] transition hover:bg-slate-50"
