@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { use, useEffect, useState } from "react";
 import MobileShell from "@/components/layout/MobileShell";
 
-export default function LoginVerifyClient() {
-  const searchParams = useSearchParams();
-  const verificationToken = searchParams.get("token") || "";
+export default function LoginVerifyClient({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const params = use(searchParams);
+  const verificationToken = params.token || "";
 
   const [message, setMessage] = useState("Waiting for email confirmation...");
 
