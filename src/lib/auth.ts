@@ -55,3 +55,8 @@ export async function logoutUser() {
     method: "POST",
   });
 }
+export function clearAllDummyAuth() {
+  localStorage.removeItem("dummyUser");
+  localStorage.removeItem("token");
+  localStorage.removeItem("isLoggedIn");
+}
