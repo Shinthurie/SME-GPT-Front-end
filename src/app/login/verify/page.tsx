@@ -1,20 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import MobileShell from "@/components/layout/MobileShell";
 
-function LoginVerifyContent() {
+export default function LoginVerifyPage() {
   const searchParams = useSearchParams();
   const verificationToken = searchParams.get("token") || "";
 
   const [message, setMessage] = useState("Waiting for email confirmation...");
 
   useEffect(() => {
-    if (!verificationToken) {
-      setMessage("Invalid verification link.");
-      return;
-    }
+    if (!verificationToken) return;
 
     const interval = setInterval(async () => {
       try {
@@ -59,24 +56,14 @@ function LoginVerifyContent() {
           <h1 className="text-center text-[28px] font-extrabold text-[#0f172a]">
             Verify Login
           </h1>
-
           <p className="mt-4 text-center text-[14px] text-[#64748b]">
             {message}
           </p>
-
           <p className="mt-6 text-center text-[13px] text-[#2563ff]">
             Please check your email and confirm this login.
           </p>
         </div>
       </div>
     </MobileShell>
-  );
-}
-
-export default function LoginVerifyPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-center">Loading...</div>}>
-      <LoginVerifyContent />
-    </Suspense>
   );
 }

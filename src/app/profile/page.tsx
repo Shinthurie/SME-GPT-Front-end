@@ -313,7 +313,7 @@ export default function ProfilePage() {
             }
           : prev
       );
-
+      setStoredLanguage(form.primaryLanguage as AppLanguage);
       setMessage("Profile updated successfully");
       setIsEditing(false);
     } catch (error) {
@@ -502,9 +502,16 @@ export default function ProfilePage() {
   label={t.primaryLanguage}
   value={form.primaryLanguage}
   onChange={(value) => {
-    updateField("primaryLanguage", value);
-    setStoredLanguage(value as AppLanguage);
-    window.location.reload();
+    const nextLang: AppLanguage = value === "si" ? "si" : "en";
+
+    updateField("primaryLanguage", nextLang);
+    setLang(nextLang);
+    setStoredLanguage(nextLang);
+
+    setForm((prev) => ({
+      ...prev,
+      primaryLanguage: nextLang,
+    }));
   }}
   options={[
     { label: "English", value: "en" },

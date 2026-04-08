@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import * as jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
@@ -8,7 +7,9 @@ export async function GET(req: Request) {
     const tokenParam = searchParams.get("token");
 
     if (!tokenParam) {
-      return NextResponse.redirect("http://localhost:3000/login?error=invalid_token");
+      return new NextResponse("<h2>Invalid verification link.</h2>", {
+        headers: { "Content-Type": "text/html" },
+      });
     }
 
     const verification = await prisma.loginVerification.findFirst({
@@ -19,69 +20,42 @@ export async function GET(req: Request) {
           gt: new Date(),
         },
       },
-      include: {
-        user: true,
-      },
     });
 
     if (!verification) {
-      return NextResponse.redirect("http://localhost:3000/login?error=expired_token");
+      return new NextResponse(
+        "<h2>This trust link is invalid or expired.</h2>",
+        { headers: { "Content-Type": "text/html" } }
+      );
     }
 
     await prisma.loginVerification.update({
       where: { id: verification.id },
       data: {
-        used: true,
+        approved: true,
         trusted: true,
       },
     });
 
-    const existingDevice = await prisma.trustedDevice.findFirst({
-      where: {
-        userId: verification.user.id,
-        deviceToken: verification.deviceToken,
-      },
-    });
-
-    if (!existingDevice) {
-      await prisma.trustedDevice.create({
-        data: {
-          userId: verification.user.id,
-          deviceToken: verification.deviceToken,
-          deviceName: verification.deviceName,
-          ipAddress: verification.ipAddress,
-          userAgent: verification.userAgent,
-        },
-      });
-    }
-
-    const token = jwt.sign(
-      { userId: verification.user.id },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "7d" }
+    return new NextResponse(
+      `
+      <html>
+        <body style="font-family: Arial, sans-serif; padding: 40px;">
+          <h2>Device Trusted</h2>
+          <p>The requested device can now continue to the dashboard.</p>
+          <p>That device will also be trusted for future logins.</p>
+        </body>
+      </html>
+      `,
+      {
+        headers: { "Content-Type": "text/html" },
+      }
     );
-
-    const response = NextResponse.redirect("http://localhost:3000/dashboard");
-
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    response.cookies.set("device_token", verification.deviceToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-
-    return response;
   } catch (error) {
     console.error("TRUST DEVICE ERROR:", error);
-    return NextResponse.redirect("http://localhost:3000/login?error=trust_failed");
+    return new NextResponse("<h2>Trust request failed.</h2>", {
+      headers: { "Content-Type": "text/html" },
+      status: 500,
+    });
   }
 }

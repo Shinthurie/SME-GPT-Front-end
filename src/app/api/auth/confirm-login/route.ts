@@ -25,9 +25,7 @@ export async function GET(req: Request) {
     if (!verification) {
       return new NextResponse(
         "<h2>This verification link is invalid or expired.</h2>",
-        {
-          headers: { "Content-Type": "text/html" },
-        }
+        { headers: { "Content-Type": "text/html" } }
       );
     }
 
@@ -35,6 +33,7 @@ export async function GET(req: Request) {
       where: { id: verification.id },
       data: {
         approved: true,
+        trusted: false,
       },
     });
 
@@ -43,8 +42,8 @@ export async function GET(req: Request) {
       <html>
         <body style="font-family: Arial, sans-serif; padding: 40px;">
           <h2>Login Confirmed</h2>
-          <p>Your login has been approved.</p>
-          <p>Please return to the original device to continue.</p>
+          <p>The requested device can now continue to the dashboard.</p>
+          <p>This device was not marked as trusted.</p>
         </body>
       </html>
       `,
