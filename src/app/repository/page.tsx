@@ -7,63 +7,23 @@ import BottomNav from "@/components/layout/BottomNav";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import { AppLanguage, getStoredLanguage } from "@/lib/i18n";
 
-type RepoItem = {
-  id: string;
-  type: "invoice" | "po" | "dn";
-  title: string;
-  amount: string;
-  vendorOrClient: string;
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+
+type RepoDocument = {
+  document_id: string;
+  document_type: "invoice" | "po" | "dn" | "receipt" | "unknown";
+  company_name: string;
+  supplier_name: string;
   date: string;
-  status: "ready" | "processing";
-  statusSi: string;
+  final_total_amount: string;
+  currency: string;
+  status: string;
 };
 
-const repoItems: RepoItem[] = [
-  {
-    id: "INV-2024-001",
-    type: "invoice",
-    title: "INV-2024-001",
-    amount: "LKR 45,250.00",
-    vendorOrClient: "Lanka Trading Co",
-    date: "Oct 24, 2023",
-    status: "ready",
-    statusSi: "සූදානම්",
-  },
-  {
-    id: "PO-8829-X",
-    type: "po",
-    title: "PO-8829-X",
-    amount: "LKR 128,000.00",
-    vendorOrClient: "Global Exports Ltd",
-    date: "Oct 23, 2023",
-    status: "processing",
-    statusSi: "සකසමින්",
-  },
-  {
-    id: "DN-00451",
-    type: "dn",
-    title: "DN-00451",
-    amount: "No Amount",
-    vendorOrClient: "Colombo Warehouse",
-    date: "Oct 22, 2023",
-    status: "ready",
-    statusSi: "සූදානම්",
-  },
-  {
-    id: "INV-2024-002",
-    type: "invoice",
-    title: "INV-2024-002",
-    amount: "LKR 12,400.00",
-    vendorOrClient: "Metro Supplies",
-    date: "Oct 21, 2023",
-    status: "ready",
-    statusSi: "සූදානම්",
-  },
-];
+type TabType = "all" | "invoice" | "po" | "dn" | "receipt";
 
-type TabType = "all" | "invoice" | "po" | "dn";
-
-function TypeIcon({ type }: { type: RepoItem["type"] }) {
+function TypeIcon({ type }: { type: RepoDocument["document_type"] }) {
   const map = {
     invoice: {
       bg: "bg-[#eaf0ff]",
@@ -80,9 +40,19 @@ function TypeIcon({ type }: { type: RepoItem["type"] }) {
       color: "text-[#f97316]",
       icon: "local_shipping",
     },
+    receipt: {
+      bg: "bg-[#e7f4ea]",
+      color: "text-[#16a34a]",
+      icon: "receipt_long",
+    },
+    unknown: {
+      bg: "bg-slate-100",
+      color: "text-slate-500",
+      icon: "draft",
+    },
   };
 
-  const item = map[type];
+  const item = map[type] || map.unknown;
 
   return (
     <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${item.bg} ${item.color}`}>
@@ -95,31 +65,70 @@ export default function RepositoryPage() {
   const router = useRouter();
   const [lang, setLang] = useState<AppLanguage>("en");
   const [tab, setTab] = useState<TabType>("all");
+  const [documents, setDocuments] = useState<RepoDocument[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLang(getStoredLanguage());
   }, []);
 
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/documents`);
+        const data = await res.json();
+
+        if (data.success) {
+          setDocuments(data.documents || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch documents:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDocuments();
+  }, []);
+
   const filteredItems = useMemo(() => {
-    if (tab === "all") return repoItems;
-    return repoItems.filter((item) => item.type === tab);
-  }, [tab]);
+    if (tab === "all") return documents;
+    return documents.filter((item) => item.document_type === tab);
+  }, [tab, documents]);
 
   const tabLabel = (value: TabType) => {
     if (lang === "si") {
       if (value === "all") return "සියල්ල";
       if (value === "invoice") return "ඉන්වොයිස්";
       if (value === "po") return "PO";
-      return "DN";
+      if (value === "dn") return "DN";
+      return "රිසිට්";
     }
+
     if (value === "all") return "All";
     if (value === "invoice") return "Invoice";
     if (value === "po") return "PO";
-    return "DN";
+    if (value === "dn") return "DN";
+    return "Receipt";
   };
 
   const topSubtitle =
     lang === "si" ? "SME-ව්‍යාපාර ලේඛන" : "SME business documents";
+
+  const formatAmount = (item: RepoDocument) => {
+    if (!item.final_total_amount || item.final_total_amount === "NULL") {
+      return "No Amount";
+    }
+
+    const currency = item.currency && item.currency !== "NULL" ? item.currency : "LKR";
+    return `${currency} ${item.final_total_amount}`;
+  };
+
+  const getPartyName = (item: RepoDocument) => {
+    if (item.company_name && item.company_name !== "NULL") return item.company_name;
+    if (item.supplier_name && item.supplier_name !== "NULL") return item.supplier_name;
+    return "Unknown Party";
+  };
 
   return (
     <MobileShell>
@@ -148,7 +157,7 @@ export default function RepositoryPage() {
           </div>
 
           <div className="mb-5 flex flex-wrap gap-2">
-            {(["all", "invoice", "po", "dn"] as TabType[]).map((value) => (
+            {(["all", "invoice", "po", "dn", "receipt"] as TabType[]).map((value) => (
               <button
                 key={value}
                 onClick={() => setTab(value)}
@@ -163,75 +172,87 @@ export default function RepositoryPage() {
             ))}
           </div>
 
-          <div className="space-y-4">
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"
-              >
-                <div className="flex items-start gap-4">
-                  <TypeIcon type={item.type} />
+          {loading ? (
+            <div className="rounded-[18px] border border-slate-200 bg-white p-6 text-center text-[14px] text-[#64748b]">
+              Loading documents...
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="rounded-[18px] border border-slate-200 bg-white p-6 text-center text-[14px] text-[#64748b]">
+              No documents found.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredItems.map((item) => (
+                <div
+                  key={item.document_id}
+                  className="rounded-[18px] border border-slate-200 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.05)]"
+                >
+                  <div className="flex items-start gap-4">
+                    <TypeIcon type={item.document_type} />
 
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#94a3b8]">
-                      {item.type === "invoice"
-                        ? "INVOICE"
-                        : item.type === "po"
-                        ? "PURCHASE ORDER"
-                        : "DELIVERY NOTE"}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#94a3b8]">
+                        {item.document_type === "invoice"
+                          ? "INVOICE"
+                          : item.document_type === "po"
+                          ? "PURCHASE ORDER"
+                          : item.document_type === "dn"
+                          ? "DELIVERY NOTE"
+                          : item.document_type === "receipt"
+                          ? "RECEIPT"
+                          : "DOCUMENT"}
+                      </p>
 
-                    <p className="mt-1 text-[15px] font-bold leading-tight text-[#0f172a] sm:text-[16px]">
-                      {item.title}
-                    </p>
+                      <p className="mt-1 text-[15px] font-bold leading-tight text-[#0f172a] sm:text-[16px]">
+                        {item.document_id}
+                      </p>
 
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <p className="text-[11px] text-[#94a3b8]">
-                          {item.type === "po" ? "Client" : item.type === "dn" ? "Receiver" : "Vendor"}
-                        </p>
-                        <p className="text-[13px] text-[#334155]">{item.vendorOrClient}</p>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-[11px] text-[#94a3b8]">
+                            {item.document_type === "po"
+                              ? "Client"
+                              : item.document_type === "dn"
+                              ? "Receiver"
+                              : "Vendor"}
+                          </p>
+                          <p className="text-[13px] text-[#334155]">{getPartyName(item)}</p>
+                        </div>
+
+                        <div className="sm:text-right">
+                          <p className="text-[11px] text-[#94a3b8]">Date</p>
+                          <p className="text-[13px] text-[#334155]">{item.date}</p>
+                        </div>
                       </div>
 
-                      <div className="sm:text-right">
-                        <p className="text-[11px] text-[#94a3b8]">Date</p>
-                        <p className="text-[13px] text-[#334155]">{item.date}</p>
+                      <div className="mt-3 flex items-center justify-between gap-4">
+                        <span className="inline-flex rounded-xl bg-[#dcfce7] px-3 py-1.5 text-[10px] font-bold uppercase text-[#16a34a]">
+                          ready
+                        </span>
+
+                        <button
+                         onClick={() => router.push(`/analysis/${item.document_id}`)}
+                          className="text-[12px] font-bold text-[#2563ff]"
+                        >
+                          OPEN
+                        </button>
                       </div>
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-4">
-                      <span
-                        className={`inline-flex rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase ${
-                          item.status === "ready"
-                            ? "bg-[#dcfce7] text-[#16a34a]"
-                            : "bg-[#fef3c7] text-[#d97706]"
+                    <div className="text-right">
+                      <p
+                        className={`text-[13px] font-bold ${
+                          formatAmount(item) === "No Amount" ? "text-[#94a3b8]" : "text-[#0f172a]"
                         }`}
                       >
-                        {item.status}
-                      </span>
-
-                      <button
-                        onClick={() => router.push("/analysis")}
-                        className="text-[12px] font-bold text-[#2563ff]"
-                      >
-                        OPEN
-                      </button>
+                        {formatAmount(item)}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <p
-                      className={`text-[13px] font-bold ${
-                        item.amount === "No Amount" ? "text-[#94a3b8]" : "text-[#0f172a]"
-                      }`}
-                    >
-                      {item.amount}
-                    </p>
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </main>
 
         <BottomNav />
