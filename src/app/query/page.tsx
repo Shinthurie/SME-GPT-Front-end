@@ -7,16 +7,85 @@ import BottomNav from "@/components/layout/BottomNav";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import { AppLanguage, getStoredLanguage, ui } from "@/lib/i18n";
 
+const BACKEND_URL ="http://127.0.0.1:8000";
+function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
 export default function QueryPage() {
   const router = useRouter();
   const [lang, setLang] = useState<AppLanguage>("en");
+  const [companyName, setCompanyName] = useState("");
   const [question, setQuestion] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setLang(getStoredLanguage());
+    const savedCompany = localStorage.getItem("query_company_name") || "";
+    setCompanyName(savedCompany);
   }, []);
 
   const t = ui[lang];
+
+  const handleAsk = async () => {
+    setError("");
+
+    if (!companyName.trim()) {
+      setError("Please enter your company name first.");
+      return;
+    }
+
+    if (!question.trim()) {
+      setError("Please enter a question.");
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      setError("Login token missing. Please log in again.");
+      router.push("/login");
+      return;
+    }
+
+    localStorage.setItem("query_company_name", companyName.trim());
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/ask-query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          company_name: companyName.trim(),
+          question: question.trim(),
+        }),
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
+        router.push("/login");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.explanation || "Failed to answer query.");
+      }
+
+      sessionStorage.setItem("query_result", JSON.stringify(data));
+      router.push("/answer");
+    } catch (err: any) {
+      setError(err.message || "Something went wrong while asking the question.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <MobileShell>
@@ -30,9 +99,6 @@ export default function QueryPage() {
               ← Back
             </button>
             <div className="flex items-center gap-2">
-              <div className="rounded-full border border-[#b7cbff] bg-[#eef4ff] px-4 py-2 text-[12px] text-[#2563ff]">
-                PHYSICS DEPT
-              </div>
               <LanguageSwitcher />
             </div>
           </div>
@@ -42,39 +108,53 @@ export default function QueryPage() {
           </h1>
 
           <p className="mt-4 max-w-4xl text-[14px] leading-8 text-[#64748b]">
-            {t.querySubtitleLong}
+            Ask questions using only data from your saved financial documents.
           </p>
 
-          <div className="mt-8 rounded-[20px] border border-slate-200 bg-white shadow-sm">
-            <textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={t.queryPlaceholder}
-              rows={8}
-              className="w-full resize-none rounded-t-[20px] border-0 bg-transparent px-5 py-5 text-[18px] text-[#94a3b8] outline-none"
+          <div className="mt-6 rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#64748b]">
+              Company Context
+            </p>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Enter your company name (example: AIESEC)"
+              className="mt-3 w-full rounded-[14px] border border-slate-200 px-4 py-3 text-[15px] text-[#0f172a] outline-none focus:border-[#2563ff]"
             />
-            <div className="flex items-center justify-between rounded-b-[20px] border-t border-slate-100 px-5 py-3 text-[#94a3b8]">
-              <div className="flex gap-4">
-                <span className="material-symbols-outlined text-[24px]">attach_file</span>
-                <span className="material-symbols-outlined text-[24px]">mic</span>
-              </div>
-              <span className="text-[12px]">{t.autoOcrEnabled}</span>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-[20px] border border-[#c8d7ff] bg-[#eef4ff] p-5">
-            <p className="text-[14px] leading-7 text-[#334155]">
-              <span className="font-bold text-[#2563ff]">{t.proTip}: </span>
-              {t.proTipBody}
+            <p className="mt-2 text-[12px] text-[#94a3b8]">
+              This company name will be used as the main context before answering your question.
             </p>
           </div>
 
-          <button
-            onClick={() => router.push("/answer")}
-            className="mt-8 w-full rounded-[20px] bg-[#2563ff] py-4 text-[17px] font-bold text-white shadow-[0_10px_24px_rgba(37,99,255,0.22)]"
-          >
-            ✨ {t.submitQuery}
-          </button>
+          <div className="mt-6 rounded-[20px] border border-slate-200 bg-white shadow-sm">
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="Example: What is the receivable amount we have?"
+              rows={8}
+              className="w-full resize-none rounded-t-[20px] border-0 bg-transparent px-5 py-5 text-[18px] text-[#0f172a] outline-none"
+            />
+            <div className="flex items-center justify-between rounded-b-[20px] border-t border-slate-100 px-5 py-3 text-[#94a3b8]">
+              <div className="text-[12px]">Source: your saved documents only</div>
+              <span className="text-[12px]">Explainable answer enabled</span>
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6">
+            <button
+              onClick={handleAsk}
+              disabled={loading}
+              className="w-full rounded-[18px] bg-[#2563ff] py-4 text-[15px] font-bold text-white shadow-[0_10px_24px_rgba(37,99,255,0.22)] disabled:opacity-60"
+            >
+              {loading ? "Analyzing..." : "Ask Question"}
+            </button>
+          </div>
         </main>
 
         <BottomNav />

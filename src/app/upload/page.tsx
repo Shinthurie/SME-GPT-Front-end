@@ -30,8 +30,12 @@ type PreviewData = {
   items: PreviewItem[];
 };
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL ="http://127.0.0.1:8000";
+
+function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
 
 export default function UploadPage() {
   const router = useRouter();
@@ -70,19 +74,21 @@ export default function UploadPage() {
     setDuplicateMessage("");
     setExistingDocumentId("");
   };
-  const resetAfterSuccessfulSave = () => {
-  setPreview(null);
-  setSelectedFile(null);
-  setSessionId("");
-  setShowDuplicateWarning(false);
-  setDuplicateMessage("");
-  setExistingDocumentId("");
-  setError("");
 
-  if (fileInputRef.current) {
-    fileInputRef.current.value = "";
-  }
+  const resetAfterSuccessfulSave = () => {
+    setPreview(null);
+    setSelectedFile(null);
+    setSessionId("");
+    setShowDuplicateWarning(false);
+    setDuplicateMessage("");
+    setExistingDocumentId("");
+    setError("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
+
   const handleRemoveFile = () => {
     setSelectedFile(null);
     setPreview(null);
@@ -120,6 +126,13 @@ export default function UploadPage() {
   const handleStartProcessing = async () => {
     if (!selectedFile) return;
 
+    const token = getAuthToken();
+    if (!token) {
+      setError("Login token missing. Please log in again.");
+      router.push("/login");
+      return;
+    }
+
     setIsProcessing(true);
     setError("");
     setSuccessMessage("");
@@ -135,8 +148,18 @@ export default function UploadPage() {
 
       const res = await fetch(`${BACKEND_URL}/process-document`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
+        router.push("/login");
+        return;
+      }
 
       const data = await res.json();
 
@@ -180,49 +203,64 @@ export default function UploadPage() {
   };
 
   const handleConfirmSave = async (forceSave = false) => {
-  if (!preview || !sessionId) return;
+    if (!preview || !sessionId) return;
 
-  setIsSaving(true);
-  setError("");
-  setSuccessMessage("");
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/confirm-save`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        session_id: sessionId,
-        edited_preview: preview,
-        force_save: forceSave,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (data.duplicate_found && !data.success) {
-      setShowDuplicateWarning(true);
-      setDuplicateMessage(data.message || "Already we have this document.");
-      setExistingDocumentId(data.existing_document_id || "NULL");
+    const token = getAuthToken();
+    if (!token) {
+      setError("Login token missing. Please log in again.");
+      router.push("/login");
       return;
     }
 
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || "Save failed.");
-    }
+    setIsSaving(true);
+    setError("");
+    setSuccessMessage("");
 
-    setShowDuplicateWarning(false);
-    setDuplicateMessage("");
-    setExistingDocumentId("");
-    setSuccessMessage(`Successfully updated. Document ID: ${data.document_id}`);
-    resetAfterSuccessfulSave();
-  } catch (err: any) {
-    setError(err.message || "Something went wrong while saving.");
-  } finally {
-    setIsSaving(false);
-  }
-};
+    try {
+      const res = await fetch(`${BACKEND_URL}/confirm-save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          edited_preview: preview,
+          force_save: forceSave,
+        }),
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
+        router.push("/login");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.duplicate_found && !data.success) {
+        setShowDuplicateWarning(true);
+        setDuplicateMessage(data.message || "Already we have this document.");
+        setExistingDocumentId(data.existing_document_id || "NULL");
+        return;
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Save failed.");
+      }
+
+      setShowDuplicateWarning(false);
+      setDuplicateMessage("");
+      setExistingDocumentId("");
+      setSuccessMessage(`Successfully saved. Document ID: ${data.document_id}`);
+      resetAfterSuccessfulSave();
+    } catch (err: any) {
+      setError(err.message || "Something went wrong while saving.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const renderProcessButtonText = () => {
     if (isProcessing) return "Processing...";
@@ -333,172 +371,181 @@ export default function UploadPage() {
                     className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] ${
                       active
                         ? "border-[#2563ff] bg-[#2563ff] text-white"
-                        : "border-slate-300 text-slate-300"
+                        : "border-slate-300 bg-white text-slate-400"
                     }`}
                   >
-                    {active ? "✓" : ""}
+                    {i + 1}
                   </div>
-                  {i < 3 && <div className="mt-2 h-9 w-[2px] bg-slate-200" />}
+                  {i !== 3 && <div className="mt-1 h-full w-px bg-slate-200" />}
                 </div>
 
-                <div>
-                  <p
-                    className={`text-[15px] font-semibold ${
-                      active ? "text-[#2563ff]" : "text-[#6b7280]"
-                    }`}
-                  >
-                    {title as string}
-                  </p>
-                  <p className="text-[13px] text-[#94a3b8]">{desc as string}</p>
+                <div className="flex-1 rounded-[18px] border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[15px] font-bold text-[#0f172a]">{title as string}</p>
+                  <p className="mt-1 text-[13px] text-[#64748b]">{desc as string}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-8 rounded-[20px] border border-[#c8d7ff] bg-[#eef4ff] p-5">
-            <p className="text-[14px] font-semibold text-[#0f172a]">
-              {t.privacyNoteTitle}:{" "}
-              <span className="font-normal text-[#475569]">
-                {t.privacyNoteBody}
-              </span>
-            </p>
-          </div>
-
-          <button
-            onClick={handleStartProcessing}
-            disabled={!selectedFile || isProcessing}
-            className="mt-8 w-full rounded-[20px] bg-[#2563ff] py-4 text-[17px] font-bold text-white shadow-[0_10px_24px_rgba(37,99,255,0.22)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {renderProcessButtonText()}
-          </button>
-
           {error && (
-            <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+            <div className="mt-5 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
               {error}
             </div>
           )}
 
           {successMessage && (
-            <div className="mt-4 rounded-[16px] border border-green-200 bg-green-50 px-4 py-3 text-[14px] text-green-700">
+            <div className="mt-5 rounded-[16px] border border-green-200 bg-green-50 px-4 py-3 text-[14px] text-green-700">
               {successMessage}
             </div>
           )}
 
-          {preview && (
-            <div className="mt-8 rounded-[20px] border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-[22px] font-bold text-[#0f172a]">
-                  Extracted Preview
-                </h2>
+          <div className="mt-6">
+            <button
+              onClick={handleStartProcessing}
+              disabled={!selectedFile || isProcessing}
+              className="w-full rounded-[18px] bg-[#2563ff] py-4 text-[15px] font-bold text-white shadow-[0_10px_24px_rgba(37,99,255,0.22)] disabled:opacity-60"
+            >
+              {renderProcessButtonText()}
+            </button>
+          </div>
 
+          {preview && (
+            <div className="mt-8 rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-[20px] font-extrabold text-[#0f172a]">
+                Extracted Preview
+              </h2>
+              <p className="mt-2 text-[13px] text-[#64748b]">
+                Review and edit the extracted fields before saving.
+              </p>
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {[
+                  ["document_type", "Document Type"],
+                  ["order_id", "Order ID"],
+                  ["flow_type", "Flow Type"],
+                  ["company_name", "Company Name"],
+                  ["supplier_name", "Supplier Name"],
+                  ["date", "Date"],
+                  ["currency", "Currency"],
+                  ["raw_total_amount", "Raw Total Amount"],
+                  ["final_total_amount", "Final Total Amount"],
+                  ["payable_amount", "Payable Amount"],
+                  ["cash_return", "Cash Return"],
+                  ["received_status", "Received Status"],
+                  ["paid_status", "Paid Status"],
+                ].map(([field, label]) => (
+                  <div key={field}>
+                    <p className="mb-2 text-[12px] font-semibold text-[#64748b]">
+                      {label}
+                    </p>
+                    {field === "flow_type" ? (
+                      <select
+                        value={(preview as any)[field] ?? ""}
+                        onChange={(e) =>
+                          handleFieldChange(field as keyof PreviewData, e.target.value)
+                        }
+                        className="w-full rounded-[14px] border border-slate-200 px-4 py-3 text-[14px] text-[#0f172a] outline-none focus:border-[#2563ff]"
+                      >
+                        <option value="">Select Flow Type</option>
+                        <option value="payable">payable</option>
+                        <option value="receivable">receivable</option>
+                        <option value="income">income</option>
+                        <option value="expense">expense</option>
+                      </select>
+                    ) : (
+                      <input
+                        value={String((preview as any)[field] ?? "")}
+                        onChange={(e) =>
+                          handleFieldChange(field as keyof PreviewData, e.target.value)
+                        }
+                        className="w-full rounded-[14px] border border-slate-200 px-4 py-3 text-[14px] text-[#0f172a] outline-none focus:border-[#2563ff]"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6">
+                <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#64748b]">
+                  Items
+                </p>
+
+                <div className="mt-3 space-y-3">
+                  {preview.items && preview.items.length > 0 ? (
+                    preview.items.map((item, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-3 rounded-[16px] border border-slate-200 p-4 sm:grid-cols-3"
+                      >
+                        <input
+                          value={String(item.description ?? "")}
+                          onChange={(e) =>
+                            handleItemChange(index, "description", e.target.value)
+                          }
+                          placeholder="Description"
+                          className="rounded-[12px] border border-slate-200 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
+                        />
+                        <input
+                          value={String(item.quantity ?? "")}
+                          onChange={(e) =>
+                            handleItemChange(index, "quantity", e.target.value)
+                          }
+                          placeholder="Quantity"
+                          className="rounded-[12px] border border-slate-200 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
+                        />
+                        <input
+                          value={String(item.unit_price ?? "")}
+                          onChange={(e) =>
+                            handleItemChange(index, "unit_price", e.target.value)
+                          }
+                          placeholder="Unit Price"
+                          className="rounded-[12px] border border-slate-200 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[14px] text-[#64748b]">No items extracted.</p>
+                  )}
+                </div>
+              </div>
+
+              {showDuplicateWarning && (
+                <div className="mt-6 rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-800">
+                  <p className="font-semibold">{duplicateMessage}</p>
+                  <p className="mt-1">
+                    Existing Document ID: {existingDocumentId}
+                  </p>
+
+                  <div className="mt-3 flex gap-3">
+                    <button
+                      onClick={() => handleConfirmSave(true)}
+                      disabled={isSaving}
+                      className="rounded-xl bg-amber-500 px-4 py-2 text-white"
+                    >
+                      Save Anyway
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDuplicateWarning(false);
+                        setDuplicateMessage("");
+                        setExistingDocumentId("");
+                      }}
+                      className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-amber-800"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6">
                 <button
                   onClick={() => handleConfirmSave(false)}
                   disabled={isSaving}
-                  className="rounded-[14px] bg-[#2563ff] px-5 py-2.5 text-[14px] font-semibold text-white shadow-sm disabled:opacity-60"
+                  className="w-full rounded-[18px] bg-[#16a34a] py-4 text-[15px] font-bold text-white shadow-[0_10px_24px_rgba(22,163,74,0.22)] disabled:opacity-60"
                 >
-                  {isSaving ? "Saving..." : "Confirm Save"}
+                  {isSaving ? "Saving..." : "Confirm and Save"}
                 </button>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-  {[
-    "document_type",
-    "order_id",
-    "flow_type",
-    "company_name",
-    "supplier_name",
-    "date",
-    "currency",
-    "raw_total_amount",
-    "final_total_amount",
-    "payable_amount",
-    "cash_return",
-    "received_status",
-    "paid_status",
-  ].map((field) => {
-    const isStatusField =
-      field === "received_status" || field === "paid_status";
-
-    return (
-      <div key={field}>
-        <p className="mb-1 text-[12px] font-medium text-[#94a3b8]">
-          {field}
-        </p>
-
-        {isStatusField ? (
-          <select
-            value={(preview as any)[field] ?? "NULL"}
-            onChange={(e) =>
-              handleFieldChange(field as keyof PreviewData, e.target.value)
-            }
-            className="w-full rounded-[12px] border border-slate-300 bg-white px-4 py-2.5 text-[15px] text-[#0f172a] outline-none focus:border-[#2563ff]"
-          >
-            <option value="NULL">Not applicable</option>
-
-            {field === "received_status" ? (
-              <>
-                <option value="not_received">Not received</option>
-                <option value="completed">Completed</option>
-              </>
-            ) : (
-              <>
-                <option value="not_paid">Not paid</option>
-                <option value="completed">Completed</option>
-              </>
-            )}
-          </select>
-        ) : (
-          <input
-            value={(preview as any)[field] ?? ""}
-            onChange={(e) =>
-              handleFieldChange(field as keyof PreviewData, e.target.value)
-            }
-            className="w-full rounded-[12px] border border-slate-300 bg-white px-4 py-2.5 text-[15px] text-[#0f172a] outline-none focus:border-[#2563ff]"
-          />
-        )}
-      </div>
-    );
-  })}
-</div>
-
-              <div className="mt-8">
-                <h3 className="mb-3 text-[18px] font-bold text-[#0f172a]">Items</h3>
-
-                <div className="space-y-3">
-                  {preview.items?.map((item, i) => (
-                    <div
-                      key={i}
-                      className="grid gap-2 sm:grid-cols-3 rounded-[14px] border border-slate-200 p-3"
-                    >
-                      <input
-                        value={item.description ?? ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "description", e.target.value)
-                        }
-                        className="rounded-[10px] border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
-                        placeholder="Description"
-                      />
-
-                      <input
-                        value={item.quantity ?? ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "quantity", e.target.value)
-                        }
-                        className="rounded-[10px] border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
-                        placeholder="Quantity"
-                      />
-
-                      <input
-                        value={item.unit_price ?? ""}
-                        onChange={(e) =>
-                          handleItemChange(i, "unit_price", e.target.value)
-                        }
-                        className="rounded-[10px] border border-slate-300 px-3 py-2 text-[14px] outline-none focus:border-[#2563ff]"
-                        placeholder="Unit Price"
-                      />
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -506,53 +553,6 @@ export default function UploadPage() {
 
         <BottomNav />
       </div>
-
-      {showDuplicateWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-xl">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#fff7ed] text-[#f97316]">
-              <span className="material-symbols-outlined text-[28px]">
-                warning
-              </span>
-            </div>
-
-            <h3 className="mt-4 text-center text-[20px] font-bold text-[#0f172a]">
-              Duplicate Document Warning
-            </h3>
-
-            <p className="mt-3 text-center text-[14px] leading-6 text-[#64748b]">
-              {duplicateMessage || "Already we have this document."}
-            </p>
-
-            <p className="mt-2 text-center text-[13px] text-[#94a3b8]">
-              Existing Document ID: {existingDocumentId || "NULL"}
-            </p>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => {
-                  setShowDuplicateWarning(false);
-                  setDuplicateMessage("");
-                  setExistingDocumentId("");
-                }}
-                className="rounded-[14px] border border-slate-300 px-4 py-3 text-[14px] font-semibold text-[#334155]"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowDuplicateWarning(false);
-                  handleConfirmSave(true);
-                }}
-                className="rounded-[14px] bg-[#2563ff] px-4 py-3 text-[14px] font-semibold text-white"
-              >
-                Save Anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </MobileShell>
   );
 }

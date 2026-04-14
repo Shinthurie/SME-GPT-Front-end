@@ -37,7 +37,7 @@ export default function LoginPage() {
     const result = await loginUser(email, password);
 
     if (!result.ok) {
-      setError(t.invalidLogin);
+      setError(result.data?.error || t.invalidLogin);
       return;
     }
 
@@ -46,7 +46,19 @@ export default function LoginPage() {
       return;
     }
 
-    window.location.href = "/dashboard";
+    if (result.data?.success) {
+      if (result.data.token) {
+        localStorage.setItem("token", result.data.token);
+      } else {
+        setError("Login token not received. Please try again.");
+        return;
+      }
+
+      router.push("/dashboard");
+      return;
+    }
+
+    setError("Login failed.");
   };
 
   return (
@@ -80,9 +92,9 @@ export default function LoginPage() {
                   {t.appName}
                 </h1>
 
-               <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a96ab]">
-  Secure AI Workspace
-</p>
+                <p className="mt-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-[#8a96ab]">
+                  Secure AI Workspace
+                </p>
 
                 <form onSubmit={handleLogin} className="mt-10 space-y-5">
                   <div>

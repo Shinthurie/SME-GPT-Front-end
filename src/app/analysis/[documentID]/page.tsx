@@ -7,8 +7,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import { AppLanguage, getStoredLanguage } from "@/lib/i18n";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL ="http://127.0.0.1:8000";
 
 type Item = {
   description: string;
@@ -35,6 +34,11 @@ type DocumentDetail = {
   items: Item[];
   image_url?: string | null;
 };
+
+function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
 
 function InfoCard({
   title,
@@ -80,6 +84,15 @@ export default function AnalysisDetailPage() {
     }
 
     const fetchDocument = async () => {
+      const token = getAuthToken();
+
+      if (!token) {
+        setError("Login token missing. Please log in again.");
+        setLoading(false);
+        router.push("/login");
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
@@ -87,7 +100,17 @@ export default function AnalysisDetailPage() {
         const res = await fetch(`${BACKEND_URL}/documents/${documentId}`, {
           method: "GET",
           cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
+
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
 
         const data = await res.json();
 
@@ -104,7 +127,7 @@ export default function AnalysisDetailPage() {
     };
 
     fetchDocument();
-  }, [documentId]);
+  }, [documentId, router]);
 
   const formatParty = () => {
     if (!document) return "NULL";

@@ -7,8 +7,7 @@ import BottomNav from "@/components/layout/BottomNav";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import { AppLanguage, getStoredLanguage } from "@/lib/i18n";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL ="http://127.0.0.1:8000";
 
 type RepoDocument = {
   document_id: string;
@@ -22,6 +21,11 @@ type RepoDocument = {
 };
 
 type TabType = "all" | "invoice" | "po" | "dn" | "receipt";
+
+function getAuthToken() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
 
 function TypeIcon({ type }: { type: RepoDocument["document_type"] }) {
   const map = {
@@ -67,6 +71,7 @@ export default function RepositoryPage() {
   const [tab, setTab] = useState<TabType>("all");
   const [documents, setDocuments] = useState<RepoDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setLang(getStoredLanguage());
@@ -74,22 +79,48 @@ export default function RepositoryPage() {
 
   useEffect(() => {
     const fetchDocuments = async () => {
+      const token = getAuthToken();
+
+      if (!token) {
+        setError("Login token missing. Please log in again.");
+        setLoading(false);
+        router.push("/login");
+        return;
+      }
+
       try {
-        const res = await fetch(`${BACKEND_URL}/documents`);
+        const res = await fetch(`${BACKEND_URL}/documents`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
+
         const data = await res.json();
 
-        if (data.success) {
-          setDocuments(data.documents || []);
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to fetch documents.");
         }
-      } catch (error) {
-        console.error("Failed to fetch documents:", error);
+
+        setDocuments(data.documents || []);
+      } catch (fetchError: any) {
+        console.error("Failed to fetch documents:", fetchError);
+        setError(fetchError.message || "Failed to fetch documents.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchDocuments();
-  }, []);
+  }, [router]);
 
   const filteredItems = useMemo(() => {
     if (tab === "all") return documents;
@@ -176,6 +207,10 @@ export default function RepositoryPage() {
             <div className="rounded-[18px] border border-slate-200 bg-white p-6 text-center text-[14px] text-[#64748b]">
               Loading documents...
             </div>
+          ) : error ? (
+            <div className="rounded-[18px] border border-red-200 bg-red-50 p-6 text-center text-[14px] text-red-700">
+              {error}
+            </div>
           ) : filteredItems.length === 0 ? (
             <div className="rounded-[18px] border border-slate-200 bg-white p-6 text-center text-[14px] text-[#64748b]">
               No documents found.
@@ -221,7 +256,9 @@ export default function RepositoryPage() {
 
                         <div className="sm:text-right">
                           <p className="text-[11px] text-[#94a3b8]">Date</p>
-                          <p className="text-[13px] text-[#334155]">{item.date}</p>
+                          <p className="text-[13px] text-[#334155]">
+                            {item.date && item.date !== "NULL" ? item.date : "No Date"}
+                          </p>
                         </div>
                       </div>
 
@@ -231,7 +268,7 @@ export default function RepositoryPage() {
                         </span>
 
                         <button
-                         onClick={() => router.push(`/analysis/${item.document_id}`)}
+                          onClick={() => router.push(`/analysis/${item.document_id}`)}
                           className="text-[12px] font-bold text-[#2563ff]"
                         >
                           OPEN

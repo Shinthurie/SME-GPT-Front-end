@@ -11,6 +11,13 @@ export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Email and password are required." },
+        { status: 400 }
+      );
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
     });
@@ -39,7 +46,7 @@ export async function POST(req: Request) {
       deviceToken = generateDeviceToken();
     }
 
-    const userAgent = headersList.get("user-agent");
+    const userAgent = headersList.get("user-agent") || "unknown";
     const ipAddress = headersList.get("x-forwarded-for") || "unknown";
     const deviceName = getDeviceName(userAgent);
 
@@ -128,7 +135,16 @@ export async function POST(req: Request) {
       },
     });
 
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        companyName: user.companyName,
+      },
+    });
 
     response.cookies.set("token", token, {
       httpOnly: true,
@@ -148,7 +164,11 @@ export async function POST(req: Request) {
 
     return response;
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
-    return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    console.error("Login error:", error);
+
+    return NextResponse.json(
+      { error: "Something went wrong during login." },
+      { status: 500 }
+    );
   }
 }

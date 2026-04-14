@@ -5,11 +5,10 @@ import { useRouter } from "next/navigation";
 import MobileShell from "@/components/layout/MobileShell";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import BottomNav from "@/components/layout/BottomNav";
-import { getSession, logoutUser, SessionUser } from "@/lib/auth";
+import { getSession, logoutUser, SessionUser, getStoredToken } from "@/lib/auth";
 import { AppLanguage, getStoredLanguage, ui } from "@/lib/i18n";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL ="http://127.0.0.1:8000";
 
 type SummaryData = {
   total: number;
@@ -111,6 +110,7 @@ export default function DashboardPage() {
   const [session, setSession] = useState<SessionUser | null>(null);
   const [lang, setLang] = useState<AppLanguage>("en");
   const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -126,14 +126,38 @@ export default function DashboardPage() {
       setSession(currentSession);
 
       try {
-        const res = await fetch(`${BACKEND_URL}/dashboard-summary`);
+        const token = getStoredToken();
+
+        if (!token) {
+          setError("Missing login token. Please log in again.");
+          return;
+        }
+
+        const res = await fetch(`${BACKEND_URL}/dashboard-summary`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        });
+
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          sessionStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
+
         const data = await res.json();
 
-        if (data.success) {
-          setSummary(data);
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to fetch dashboard summary.");
         }
-      } catch (error) {
-        console.error("Failed to fetch dashboard summary:", error);
+
+        setSummary(data);
+      } catch (fetchError: any) {
+        console.error("Failed to fetch dashboard summary:", fetchError);
+        setError(fetchError.message || "Failed to fetch dashboard summary.");
       }
     };
 
@@ -151,7 +175,9 @@ export default function DashboardPage() {
         ? `${doc.currency !== "NULL" ? doc.currency : "LKR"} ${doc.final_total_amount}`
         : "No Amount";
 
-    return `${doc.date} • ${amount}`;
+    const docDate = doc.date && doc.date !== "NULL" ? doc.date : "No Date";
+
+    return `${docDate} • ${amount}`;
   };
 
   return (
@@ -170,7 +196,9 @@ export default function DashboardPage() {
                 <h1 className="text-[20px] font-extrabold tracking-tight text-[#0f172a]">
                   SME-GPT
                 </h1>
-                <p className="text-[12px] text-[#64748b]">{session.companyName}</p>
+                <p className="text-[12px] text-[#64748b]">
+                  {session.companyName}
+                </p>
               </div>
             </div>
 
@@ -212,6 +240,12 @@ export default function DashboardPage() {
             </p>
           </section>
 
+          {error ? (
+            <div className="mt-4 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+              {error}
+            </div>
+          ) : null}
+
           <section className="mt-6">
             <button
               onClick={() => router.push("/upload")}
@@ -230,13 +264,29 @@ export default function DashboardPage() {
 
           <section className="mt-8 grid gap-3 sm:grid-cols-3">
             <StatCard label={t.totalDocs} value={String(summary?.total ?? 0)} />
-            <StatCard label="Invoices" value={String(summary?.invoice ?? 0)} valueColor="#2563ff" />
-            <StatCard label="Receipts" value={String(summary?.receipt ?? 0)} valueColor="#16a34a" />
+            <StatCard
+              label="Invoices"
+              value={String(summary?.invoice ?? 0)}
+              valueColor="#2563ff"
+            />
+            <StatCard
+              label="Receipts"
+              value={String(summary?.receipt ?? 0)}
+              valueColor="#16a34a"
+            />
           </section>
 
           <section className="mt-3 grid gap-3 sm:grid-cols-2">
-            <StatCard label="PO" value={String(summary?.po ?? 0)} valueColor="#9333ea" />
-            <StatCard label="DN" value={String(summary?.dn ?? 0)} valueColor="#f97316" />
+            <StatCard
+              label="PO"
+              value={String(summary?.po ?? 0)}
+              valueColor="#9333ea"
+            />
+            <StatCard
+              label="DN"
+              value={String(summary?.dn ?? 0)}
+              valueColor="#f97316"
+            />
           </section>
 
           <section className="mt-8">
